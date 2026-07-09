@@ -1,0 +1,91 @@
+## Check List :
+#Set up job
+#Checkout code
+#Configure AWS credentials via OIDC
+#Login to Amazon ECR
+#Define image tags
+#Build and push Docker images
+#Setup Git auth using GITHUB_TOKEN
+#Update Helm values file with new image tag
+#CI Complete
+#Post Login to Amazon ECR
+#Post Configure AWS credentials via OIDC
+#Post Checkout code
+#Complete job
+
+
+name: Build and Push UI Service to ECR
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/ui/src**"
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: retails-store/ui
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  Build-and-Push-UI:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::574739792835:role/github-actions-oidc-role-ui3
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+      
+      - name: Define Image tags
+        id: vars
+        run: |
+          SHA_TAG=sha-${GITHUB_SHA::7}
+          BASE_IMAGE= "${{ steps.login-ecr.outputs.registry}}/${{ env.ECR_REPOSITORY }}"
+          echo "BASE_IMAGE=$BASE_IMAGE" >> $GITHUB_ENV
+          echo "TAGS=latest $SHA_TAG" >> $GITHUB_ENV
+          echo "Using tags: latest and $SHA_TAG"
+          echo "latest = convenience tag for testing"
+          echo "$SHA_TAG = immutable tags used in helm values"
+      
+      - name: Build and Push Docker Image
+        run : |
+          for tag in $TAGS; do
+            IMAGE_URI="$BASE_IMAGE:$tag"
+            echo "Building and Pushing $BASE_URI"
+            docker build -t $IMAGE_URI src/ui
+            docker push $IMAGE_URI
+          done
+
+      - name: Setup Git auth using GITHUB_TOKEN
+        run: |
+          git config --global user.name "ci-bot"
+          git config --global user.email "ci-bot@capclouds.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN}}@github.com/${{ github.repository}}.git
+      
+      - name: Update Helm values file with new image tags
+        run: |
+          cd src/ui
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@capclouds.com"
+          sed -i "s|^ tag: .*| tag: sha-${GITHUB_SHA::7}|" chart/values-ui.yaml
+          git dff --quite || (
+            git add chart/values-ui.yaml
+            git commit -m "Update UI Image tag to sha-${GITHUB_SHA::7}"
+            git push origin main )
+
+      - name: CI Complete
+        run: |
+          echo "Image push and Git update completed"
+          echo "Tags used: $TAGS
