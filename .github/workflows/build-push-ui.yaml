@@ -20,7 +20,8 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "src/ui/src**"
+      - "src/ui/src/**"
+      - ".github/workflows/build-push-ui.yaml"
 
 env:
   AWS_REGION: us-east-1
