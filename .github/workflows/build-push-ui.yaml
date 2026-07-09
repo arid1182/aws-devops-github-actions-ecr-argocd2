@@ -89,4 +89,4 @@ jobs:
       - name: CI Complete
         run: |
           echo "Image push and Git update completed"
-          echo "Tags used: $TAGS
+          echo "Tags used: $TAGS"
